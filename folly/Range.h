@@ -35,9 +35,6 @@
  * @struct folly::range
  */
 
-// @author Mark Rabkin (mrabkin@fb.com)
-// @author Andrei Alexandrescu (andrei.alexandrescu@fb.com)
-
 #pragma once
 
 #include <folly/Portability.h>
@@ -56,11 +53,8 @@
 #include <iterator>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
-
-#if FOLLY_HAS_STRING_VIEW
-#include <string_view> // @manual
-#endif
 
 #if __has_include(<fmt/format.h>)
 #include <fmt/format.h>
@@ -71,7 +65,6 @@
 #include <folly/Traits.h>
 #include <folly/detail/RangeCommon.h>
 #include <folly/detail/RangeSse42.h>
-#include <folly/lang/Byte.h>
 
 // Ignore shadowing warnings within this file, so includers can use -Wshadow.
 FOLLY_PUSH_WARNING
@@ -186,7 +179,7 @@ constexpr bool range_is_char_type_v_ =
 
 void range_is_byte_type_f_(unsigned char const*);
 void range_is_byte_type_f_(signed char const*);
-void range_is_byte_type_f_(byte const*);
+void range_is_byte_type_f_(std::byte const*);
 template <typename Iter>
 using range_is_byte_type_d_ =
     decltype(folly::detail::range_is_byte_type_f_(FOLLY_DECLVAL(Iter)));
@@ -635,7 +628,6 @@ class Range {
   //
   // At the moment the set of implicit target types consists of just
   // std::string_view (when it is available).
-#if FOLLY_HAS_STRING_VIEW
   struct NotStringView {};
   template <typename ValueType>
   struct StringViewType
@@ -652,10 +644,6 @@ class Range {
                 Iter const&,
                 size_type>,
             std::is_constructible<Target, _t<StringViewType<value_type>>>> {};
-#else
-  template <typename Target>
-  using IsConstructibleViaStringView = std::false_type;
-#endif
 
  public:
   /// explicit operator conversion to any compatible type
@@ -687,7 +675,6 @@ class Range {
     return Tgt(b_, e_);
   }
 
-#if FOLLY_HAS_STRING_VIEW
   /// implicit operator conversion to std::string_view
   template <
       typename Tgt,
@@ -704,7 +691,6 @@ class Range {
       std::is_nothrow_constructible<Tgt, Iter const&, size_type>::value) {
     return Tgt(b_, walk_size());
   }
-#endif
 
   /// explicit non-operator conversion to any compatible type
   ///
@@ -838,6 +824,14 @@ class Range {
     }
 
     return Range(b_ + first, std::min(length, size() - first));
+  }
+
+  template <
+      typename...,
+      typename T = Iter,
+      std::enable_if_t<detail::range_is_char_type_v_<T>, int> = 0>
+  Range substr(size_type first, size_type length = npos) const {
+    return subpiece(first, length);
   }
 
   // unchecked versions
@@ -984,6 +978,18 @@ class Range {
         trunc.begin(), trunc.end(), other.begin(), std::forward<Comp>(eq));
   }
 
+  bool starts_with(const_range_type other) const noexcept {
+    return startsWith(other);
+  }
+  bool starts_with(value_type c) const noexcept { return startsWith(c); }
+  template <
+      typename...,
+      typename T = Iter,
+      std::enable_if_t<detail::range_is_char_type_v_<T>, int> = 0>
+  bool starts_with(const value_type* other) const {
+    return startsWith(other);
+  }
+
   /**
    * Does this Range end with another range?
    */
@@ -1007,6 +1013,18 @@ class Range {
   bool equals(const const_range_type& other, Comp&& eq) const {
     return size() == other.size() &&
         std::equal(begin(), end(), other.begin(), std::forward<Comp>(eq));
+  }
+
+  bool ends_with(const_range_type other) const noexcept {
+    return endsWith(other);
+  }
+  bool ends_with(value_type c) const noexcept { return endsWith(c); }
+  template <
+      typename...,
+      typename T = Iter,
+      std::enable_if_t<detail::range_is_char_type_v_<T>, int> = 0>
+  bool ends_with(const value_type* other) const {
+    return endsWith(other);
   }
 
   /**
@@ -1135,7 +1153,6 @@ class Range {
    *    }
    *  }
    *
-   * @author: Marcelo Juchem <marcelo@fb.com>
    */
   Range split_step(value_type delimiter) {
     auto i = find(delimiter);
@@ -1220,7 +1237,6 @@ class Range {
    *    }
    *  };
    *
-   * @author: Marcelo Juchem <marcelo@fb.com>
    */
   template <typename TProcess, typename... Args>
   auto split_step(value_type delimiter, TProcess&& process, Args&&... args)
@@ -1296,6 +1312,16 @@ constexpr Range<T const*> range(std::array<T, n> const& array) {
 template <class T, size_t n>
 constexpr Range<T const*> crange(std::array<T, n> const& array) {
   return Range<T const*>{array};
+}
+
+template <class T>
+constexpr Range<T const*> range(std::initializer_list<T> ilist) {
+  return Range<T const*>(ilist.begin(), ilist.end());
+}
+
+template <class T>
+constexpr Range<T const*> crange(std::initializer_list<T> ilist) {
+  return Range<T const*>(ilist.begin(), ilist.end());
 }
 
 using StringPiece = Range<const char*>;
@@ -1713,7 +1739,7 @@ FOLLY_ASSUME_FBVECTOR_COMPATIBLE_1(folly::Range)
 // Unfortunately it is not possible to forward declare enable_view under
 // MSVC 2019.8 due to compiler bugs, so we need to include the actual
 // definition if available.
-#if __has_include(<range/v3/range/concepts.hpp>) && defined(_MSC_VER) && _MSC_VER >= 1920
+#if __has_include(<range/v3/range/concepts.hpp>) && defined(_MSC_VER)
 #include <range/v3/range/concepts.hpp> // @manual
 #else
 namespace ranges {
@@ -1726,5 +1752,5 @@ extern const bool enable_view;
 // the view concept (a lightweight, non-owning range).
 namespace ranges {
 template <class Iter>
-FOLLY_INLINE_VARIABLE constexpr bool enable_view<::folly::Range<Iter>> = true;
+inline constexpr bool enable_view<::folly::Range<Iter>> = true;
 } // namespace ranges

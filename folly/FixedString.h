@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// @author: Eric Niebler (eniebler)
 // Fixed-size string type, for constexpr string handling.
 
 #pragma once
@@ -25,6 +24,7 @@
 #include <iosfwd>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
@@ -35,10 +35,6 @@
 #include <folly/lang/Exception.h>
 #include <folly/lang/Ordering.h>
 #include <folly/portability/Constexpr.h>
-
-#if FOLLY_HAS_STRING_VIEW
-#include <string_view>
-#endif
 
 namespace folly {
 
@@ -57,11 +53,6 @@ template <class = void>
 struct FixedStringBase_ {
   static constexpr std::size_t npos = static_cast<std::size_t>(-1);
 };
-
-#if FOLLY_CPLUSPLUS < 201703L
-template <class Void>
-constexpr std::size_t FixedStringBase_<Void>::npos;
-#endif
 
 using FixedStringBase = FixedStringBase_<>;
 
@@ -674,7 +665,6 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
       : BasicFixedString{
             that, detail::fixedstring::checkOverflow(count, N), Indices{}} {}
 
-#if FOLLY_HAS_STRING_VIEW
   /** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** **
    * Construct from a `std::basic_string_view<Char>`
    * \param that The source basic_string_view
@@ -687,7 +677,6 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
   constexpr /* implicit */ BasicFixedString(
       std::basic_string_view<Char> that) noexcept(false)
       : BasicFixedString{that.data(), that.size()} {}
-#endif
 
   /** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** **
    * Construct an BasicFixedString that contains `count` characters, all
@@ -799,7 +788,6 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
     return std::basic_string<Char>{begin(), end()};
   }
 
-#if FOLLY_HAS_STRING_VIEW
   /** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** ** **
    * Conversion to std::basic_string_view<Char>
    * \return `std::basic_string_view<Char>{begin(), end()}`
@@ -807,7 +795,6 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
   /* implicit */ constexpr operator std::basic_string_view<Char>() const {
     return std::basic_string_view<Char>{begin(), size()};
   }
-#endif
 
   // Think hard about whether this is a good idea. It's certainly better than
   // an implicit conversion to `const Char*` since `delete "hi"_fs` will fail

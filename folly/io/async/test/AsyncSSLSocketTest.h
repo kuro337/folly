@@ -705,7 +705,7 @@ class HandshakeTimeoutCallback : public SSLServerAcceptCallbackBase {
 
     hcb_->setSocket(sock);
     sock->getEventBase()->tryRunAfterDelay(
-        [=, this] {
+        [=] {
           std::cerr << "Delayed SSL accept, client will have close by now"
                     << std::endl;
           // SSL accept will fail
@@ -962,7 +962,6 @@ class RenegotiatingServer : public AsyncSSLSocket::HandshakeCB,
   bool renegotiationError_{false};
 };
 
-#ifndef OPENSSL_NO_TLSEXT
 class SNIClient : private AsyncSSLSocket::HandshakeCB,
                   private AsyncTransport::WriteCallback {
  public:
@@ -1050,7 +1049,6 @@ class SNIServer : private AsyncSSLSocket::HandshakeCB,
   std::shared_ptr<folly::SSLContext> sniCtx_;
   std::string expectedServerName_;
 };
-#endif
 
 class SSLClient : public AsyncSocket::ConnectCallback,
                   public AsyncTransport::WriteCallback,

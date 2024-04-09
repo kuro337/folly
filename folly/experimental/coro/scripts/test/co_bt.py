@@ -16,6 +16,7 @@
 import sys
 import unittest
 
+
 # mock lldb module
 class Lldb:
     class Command:
@@ -43,4 +44,4 @@ class CoBt(unittest.TestCase):
 
         null1 = co_bt.LldbValue(Lldb.SBValue("0x0"))
         null2 = co_bt.LldbValue(Lldb.SBValue("0x0"))
-        self.assertEquals(null1, null2)
+        self.assertEqual(null1, null2)

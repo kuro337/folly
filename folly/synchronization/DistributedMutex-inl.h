@@ -18,6 +18,7 @@
 #include <atomic>
 #include <cstdint>
 #include <limits>
+#include <new>
 #include <stdexcept>
 #include <thread>
 #include <utility>
@@ -34,6 +35,7 @@
 #include <folly/functional/Invoke.h>
 #include <folly/lang/Align.h>
 #include <folly/lang/Bits.h>
+#include <folly/lang/Exception.h>
 #include <folly/portability/Asm.h>
 #include <folly/synchronization/AtomicNotification.h>
 #include <folly/synchronization/AtomicUtil.h>
@@ -644,7 +646,7 @@ void throwIfExceptionOccurred(Request&, Waiter& waiter, bool exception) {
   // memory
   if (FOLLY_UNLIKELY(!folly::is_nothrow_invocable_v<const F&> && exception)) {
     auto storage = &waiter.storage_;
-    auto exc = folly::launder(reinterpret_cast<std::exception_ptr*>(storage));
+    auto exc = std::launder(reinterpret_cast<std::exception_ptr*>(storage));
     auto copy = std::move(*exc);
     exc->std::exception_ptr::~exception_ptr();
     std::rethrow_exception(std::move(copy));
@@ -681,7 +683,7 @@ void detach(
   static_assert(!std::is_same<ReturnType, void>{}, "");
   static_assert(sizeof(waiter.storage_) >= sizeof(ReturnType), "");
 
-  auto& val = *folly::launder(reinterpret_cast<ReturnType*>(&waiter.storage_));
+  auto& val = *std::launder(reinterpret_cast<ReturnType*>(&waiter.storage_));
   new (&request.value_) ReturnType{std::move(val)};
   val.~ReturnType();
 }
@@ -698,7 +700,7 @@ void detach(
   static_assert(!std::is_same<ReturnType, void>{}, "");
   static_assert(sizeof(storage) >= sizeof(ReturnType), "");
 
-  auto& val = *folly::launder(reinterpret_cast<ReturnType*>(&storage));
+  auto& val = *std::launder(reinterpret_cast<ReturnType*>(&storage));
   new (&request.value_) ReturnType{std::move(val)};
   val.~ReturnType();
 }
@@ -1342,12 +1344,12 @@ FOLLY_ALWAYS_INLINE std::uintptr_t tryCombine(
   // members of the waiter struct, so it's fine to use those values here
   if (isWaitingCombiner(value) &&
       (iteration <= kMaxCombineIterations || preempted(value, now))) {
-    try {
-      task();
-      waiter->futex_.store(kCombined, std::memory_order_release);
-    } catch (...) {
-      transferCurrentException(waiter);
-    }
+    catch_exception(
+        [&] {
+          task();
+          waiter->futex_.store(kCombined, std::memory_order_release);
+        },
+        [&] { transferCurrentException(waiter); });
     return next;
   }
 

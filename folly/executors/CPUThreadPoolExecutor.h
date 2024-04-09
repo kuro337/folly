@@ -65,7 +65,8 @@ namespace folly {
  * priority tasks could still hog all the threads. (at last check pthreads
  * thread priorities didn't work very well).
  */
-class CPUThreadPoolExecutor : public ThreadPoolExecutor {
+class CPUThreadPoolExecutor : public ThreadPoolExecutor,
+                              public GetThreadIdCollector {
  public:
   struct CPUTask;
   struct Options {
@@ -74,22 +75,14 @@ class CPUThreadPoolExecutor : public ThreadPoolExecutor {
       allow,
     };
 
-    constexpr Options() noexcept
-        : blocking{Blocking::allow}, queueObserverFactory{nullptr} {}
+    constexpr Options() noexcept : blocking{Blocking::allow} {}
 
     Options& setBlocking(Blocking b) {
       blocking = b;
       return *this;
     }
 
-    Options& setQueueObserverFactory(
-        std::unique_ptr<folly::QueueObserverFactory> factory) {
-      queueObserverFactory = std::move(factory);
-      return *this;
-    }
-
     Blocking blocking;
-    std::unique_ptr<folly::QueueObserverFactory> queueObserverFactory{nullptr};
   };
 
   // These function return unbounded blocking queues with the default semaphore
@@ -166,27 +159,20 @@ class CPUThreadPoolExecutor : public ThreadPoolExecutor {
 
   uint8_t getNumPriorities() const override;
 
+  /// Implements the GetThreadIdCollector interface
+  WorkerProvider* FOLLY_NULLABLE getThreadIdCollector() override;
+
   struct CPUTask : public ThreadPoolExecutor::Task {
+    CPUTask(); // Poison.
     CPUTask(
         Func&& f,
         std::chrono::milliseconds expiration,
         Func&& expireCallback,
-        int8_t pri)
-        : Task(std::move(f), expiration, std::move(expireCallback)),
-          priority_(pri) {}
-    CPUTask()
-        : Task(nullptr, std::chrono::milliseconds(0), nullptr),
-          poison(true),
-          priority_(0) {}
-
-    size_t queuePriority() const { return priority_; }
-
-    intptr_t& queueObserverPayload() { return queueObserverPayload_; }
-
-    bool poison = false;
+        int8_t pri);
 
    private:
-    int8_t priority_;
+    friend class CPUThreadPoolExecutor;
+
     intptr_t queueObserverPayload_;
   };
 
@@ -218,7 +204,8 @@ class CPUThreadPoolExecutor : public ThreadPoolExecutor {
   std::unique_ptr<BlockingQueue<CPUTask>> taskQueue_;
   // It is possible to have as many detectors as there are priorities,
   std::array<std::atomic<folly::QueueObserver*>, UCHAR_MAX + 1> queueObservers_;
-  std::unique_ptr<folly::QueueObserverFactory> queueObserverFactory_;
+  std::unique_ptr<folly::QueueObserverFactory> queueObserverFactory_{
+      createQueueObserverFactory()};
   std::atomic<ssize_t> threadsToStop_{0};
   Options::Blocking prohibitBlockingOnThreadPools_ = Options::Blocking::allow;
 };

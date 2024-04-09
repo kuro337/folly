@@ -26,10 +26,10 @@
 #include <folly/Executor.h>
 #include <folly/Memory.h>
 #include <folly/Unit.h>
-#include <folly/dynamic.h>
 #include <folly/executors/ManualExecutor.h>
 #include <folly/futures/Future.h>
 #include <folly/io/async/EventBase.h>
+#include <folly/json/dynamic.h>
 #include <folly/portability/GTest.h>
 #include <folly/synchronization/Baton.h>
 
@@ -345,7 +345,7 @@ TEST(SemiFuture, ImplicitConstructor) {
 }
 
 TEST(SemiFuture, InPlaceConstructor) {
-  auto f = SemiFuture<std::pair<int, double>>(in_place, 5, 3.2);
+  auto f = SemiFuture<std::pair<int, double>>(std::in_place, 5, 3.2);
   EXPECT_EQ(5, f.value().first);
 }
 
@@ -720,7 +720,7 @@ TEST(SemiFuture, DeferWithinContinuation) {
   ASSERT_EQ(result, 7);
 }
 
-TEST(SemiFuture, onError) {
+TEST(SemiFuture, DeferError) {
   bool theFlag = false;
   auto flag = [&] { theFlag = true; };
 #define EXPECT_FLAG()     \

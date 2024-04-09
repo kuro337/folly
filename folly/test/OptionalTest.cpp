@@ -20,20 +20,38 @@
 #include <initializer_list>
 #include <iomanip>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
 
-#include <boost/optional.hpp>
-
+#include <folly/CppAttributes.h>
 #include <folly/Portability.h>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
 
 using std::shared_ptr;
 using std::unique_ptr;
+
+namespace {
+
+struct HashableStruct {};
+struct UnhashableStruct {};
+
+} // namespace
+
+namespace std {
+
+template <>
+struct hash<HashableStruct> {
+  [[maybe_unused]] size_t operator()(const HashableStruct&) const noexcept {
+    return 0;
+  }
+};
+
+} // namespace std
 
 namespace folly {
 
@@ -59,10 +77,13 @@ struct NoDefault {
 static_assert(sizeof(Optional<char>) == 2, "");
 static_assert(sizeof(Optional<int>) == 8, "");
 static_assert(sizeof(Optional<NoDefault>) == 4, "");
-static_assert(sizeof(Optional<char>) == sizeof(boost::optional<char>), "");
-static_assert(sizeof(Optional<short>) == sizeof(boost::optional<short>), "");
-static_assert(sizeof(Optional<int>) == sizeof(boost::optional<int>), "");
-static_assert(sizeof(Optional<double>) == sizeof(boost::optional<double>), "");
+static_assert(sizeof(Optional<char>) == sizeof(std::optional<char>), "");
+static_assert(sizeof(Optional<short>) == sizeof(std::optional<short>), "");
+static_assert(sizeof(Optional<int>) == sizeof(std::optional<int>), "");
+static_assert(sizeof(Optional<double>) == sizeof(std::optional<double>), "");
+
+static_assert(is_hashable_v<folly::Optional<HashableStruct>>);
+static_assert(!is_hashable_v<folly::Optional<UnhashableStruct>>);
 
 TEST(Optional, ConstexprConstructible) {
   // Use FOLLY_STORAGE_CONSTEXPR to work around MSVC not taking this.
@@ -245,14 +266,14 @@ TEST(Optional, EmptyConstruct) {
 
 TEST(Optional, InPlaceConstruct) {
   using A = std::pair<int, double>;
-  Optional<A> opt(in_place, 5, 3.2);
+  Optional<A> opt(std::in_place, 5, 3.2);
   EXPECT_TRUE(bool(opt));
   EXPECT_EQ(5, opt->first);
 }
 
 TEST(Optional, InPlaceNestedConstruct) {
   using A = std::pair<int, double>;
-  Optional<Optional<A>> opt(in_place, in_place, 5, 3.2);
+  Optional<Optional<A>> opt(std::in_place, std::in_place, 5, 3.2);
   EXPECT_TRUE(bool(opt));
   EXPECT_TRUE(bool(*opt));
   EXPECT_EQ(5, (*opt)->first);
@@ -418,9 +439,9 @@ TEST(Optional, Comparisons) {
   EXPECT_FALSE(o1 > 2);
   */
 
-  // boost::optional does support comparison with contained value, which can
+  // std::optional does support comparison with contained value, which can
   // lead to confusion when a bool is contained
-  boost::optional<int> boi(3);
+  std::optional<int> boi(3);
   EXPECT_TRUE(boi < 5);
   EXPECT_TRUE(boi <= 4);
   EXPECT_TRUE(boi == 3);
@@ -434,7 +455,7 @@ TEST(Optional, Comparisons) {
   EXPECT_TRUE(5 >= boi);
   EXPECT_TRUE(6 > boi);
 
-  boost::optional<bool> bob(false);
+  std::optional<bool> bob(false);
   EXPECT_TRUE((bool)bob);
   EXPECT_TRUE(bob == false); // well that was confusing
   EXPECT_FALSE(bob != false);
@@ -664,7 +685,7 @@ TEST(Optional, MakeOptional) {
 
 TEST(Optional, InitializerListConstruct) {
   using Type = ConstructibleWithInitializerListAndArgsOnly;
-  auto&& optional = Optional<Type>{in_place, {int{}}, double{}};
+  auto&& optional = Optional<Type>{std::in_place, {int{}}, double{}};
   std::ignore = optional;
 }
 
@@ -815,7 +836,6 @@ TEST(Optional, NoneMatchesNullopt) {
   EXPECT_FALSE(op.has_value());
 }
 
-#if __cplusplus >= 201703L && __has_include(<optional>)
 TEST(Optional, StdOptionalConversions) {
   folly::Optional<int> f = 42;
   std::optional<int> s = static_cast<std::optional<int>>(f);
@@ -837,7 +857,6 @@ TEST(Optional, StdOptionalConversions) {
   EXPECT_EQ(**fp, 42);
   EXPECT_FALSE(sp);
 }
-#endif
 
 TEST(Optional, MovedFromOptionalIsEmpty) {
   // moved-from folly::Optional is empty, unlike std::optional!

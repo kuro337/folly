@@ -216,7 +216,6 @@ struct TestParams {
   bool ioUringServer = false;
   bool ioUringClient = false;
   bool manySmallBuffers = false;
-  bool epoll = false;
   bool supportBufferMovable = true;
   bool sendzc = false;
   bool registerFd = true;
@@ -231,8 +230,7 @@ struct TestParams {
         sendzc ? "_zerocopy" : "",
         "_",
         registerFd ? "" : "_noRegisterFd",
-        epoll ? "epoll" : "iouring",
-        "Backend");
+        "iouringBackend");
   }
 };
 
@@ -276,12 +274,7 @@ class AsyncIoUringSocketTest : public ::testing::TestWithParam<TestParams>,
         });
   }
 
-  EventBase::Options ebOptions() {
-    if (GetParam().epoll) {
-      return {};
-    }
-    return ioUringEbOptions();
-  }
+  EventBase::Options ebOptions() { return ioUringEbOptions(); }
 
   void maybeSkip() {
     if (unableToRun) {
@@ -297,18 +290,7 @@ class AsyncIoUringSocketTest : public ::testing::TestWithParam<TestParams>,
       return;
     }
 
-    if (GetParam().epoll) {
-      try {
-        ioUringEvent = std::make_unique<IoUringEvent>(
-            base.get(), ioOptions(GetParam()), true);
-      } catch (IoUringBackend::NotAvailable const&) {
-        unableToRun = true;
-        return;
-      }
-      backend = backendForSocketConstructor = &ioUringEvent->backend();
-    } else {
-      backend = dynamic_cast<IoUringBackend*>(base->getBackend());
-    }
+    backend = dynamic_cast<IoUringBackend*>(base->getBackend());
 
     backend->loopPoll(); // init delayed bits as this is the only thread
 
@@ -331,10 +313,11 @@ class AsyncIoUringSocketTest : public ::testing::TestWithParam<TestParams>,
     LOG(FATAL) << ex;
   }
 
+  template <typename ServerReadCallback>
   struct Connected {
     std::unique_ptr<EchoTransport> client;
     AsyncTransport::UniquePtr server;
-    std::unique_ptr<CollectCallback> callback;
+    std::unique_ptr<ServerReadCallback> callback;
     ~Connected() {
       if (server) {
         server->setReadCB(nullptr);
@@ -350,11 +333,13 @@ class AsyncIoUringSocketTest : public ::testing::TestWithParam<TestParams>,
     return ret;
   }
 
-  Connected makeConnected(ConnectedOptions options = ConnectedOptions{}) {
+  template <typename ServerReadCallback = CollectCallback>
+  Connected<ServerReadCallback> makeConnected(
+      ConnectedOptions options = ConnectedOptions{}) {
     AsyncSocketTransport::UniquePtr client;
     if (GetParam().ioUringClient) {
-      client = AsyncSocketTransport::UniquePtr(new AsyncIoUringSocket(
-          base.get(), backendForSocketConstructor, ioUringSocketOptions()));
+      client = AsyncSocketTransport::UniquePtr(
+          new AsyncIoUringSocket(base.get(), ioUringSocketOptions()));
     } else {
       client =
           AsyncSocketTransport::UniquePtr(AsyncSocket::newSocket(base.get()));
@@ -377,24 +362,22 @@ class AsyncIoUringSocketTest : public ::testing::TestWithParam<TestParams>,
     auto c = std::make_unique<EchoTransport>(
         std::move(client), GetParam().supportBufferMovable);
     c->start();
-    auto cb = std::make_unique<CollectCallback>();
-    AsyncTransport::UniquePtr sock = GetParam().ioUringServer
+    auto serverReadCallback = std::make_unique<ServerReadCallback>();
+    AsyncTransport::UniquePtr server = GetParam().ioUringServer
         ? AsyncTransport::UniquePtr(new AsyncIoUringSocket(
-              AsyncSocket::newSocket(base.get(), fd),
-              backendForSocketConstructor,
-              ioUringSocketOptions()))
+              AsyncSocket::newSocket(base.get(), fd), ioUringSocketOptions()))
         : AsyncTransport::UniquePtr(AsyncSocket::newSocket(base.get(), fd));
     if (options.serverShouldRead) {
-      sock->setReadCB(cb.get());
+      server->setReadCB(serverReadCallback.get());
     }
-    return Connected{std::move(c), std::move(sock), std::move(cb)};
+    return Connected<ServerReadCallback>{
+        std::move(c), std::move(server), std::move(serverReadCallback)};
   }
 
   bool unableToRun = false;
   std::unique_ptr<EventBase> base;
   std::unique_ptr<IoUringEvent> ioUringEvent;
   std::shared_ptr<AsyncServerSocket> serverSocket;
-  IoUringBackend* backendForSocketConstructor = nullptr;
   IoUringBackend* backend = nullptr;
   SocketAddress serverAddress;
 
@@ -431,8 +414,7 @@ TEST_P(AsyncIoUringSocketTest, ConnectTimeout) {
       ? SocketAddressTestHelper::kGooglePublicDnsAAddrIPv4
       : nullptr;
 
-  AsyncIoUringSocket::UniquePtr socket(
-      new AsyncIoUringSocket(base.get(), backend));
+  AsyncIoUringSocket::UniquePtr socket(new AsyncIoUringSocket(base.get()));
   socket->connect(
       &cb, SocketAddress{host, 65535}, std::chrono::milliseconds(1));
 
@@ -832,19 +814,16 @@ auto mkAllTestParams() {
   for (bool server : {false, true}) {
     for (bool client : {false, true}) {
       for (bool manySmallBuffers : {false, true}) {
-        for (bool epoll : {false, true}) {
-          TestParams base;
-          base.ioUringServer = server;
-          base.ioUringClient = client;
-          base.manySmallBuffers = manySmallBuffers;
-          base.epoll = epoll;
-          t.push_back(base);
+        TestParams base;
+        base.ioUringServer = server;
+        base.ioUringClient = client;
+        base.manySmallBuffers = manySmallBuffers;
+        t.push_back(base);
 
-          // only expand feature flags in some cases to reduce the massive
-          // explosion of tests
-          if (server && client && !epoll) {
-            addFeatureCases(base);
-          }
+        // only expand feature flags in some cases to reduce the massive
+        // explosion of tests
+        if (server && client) {
+          addFeatureCases(base);
         }
       }
     }

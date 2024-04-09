@@ -33,6 +33,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -44,10 +45,6 @@
 #include <folly/hash/SpookyHashV1.h>
 #include <folly/hash/SpookyHashV2.h>
 #include <folly/lang/Bits.h>
-
-#if FOLLY_HAS_STRING_VIEW
-#include <string_view>
-#endif
 
 namespace folly {
 namespace hash {
@@ -517,7 +514,7 @@ namespace detail {
 template <typename Int>
 struct integral_hasher {
   using folly_is_avalanching =
-      bool_constant<(sizeof(Int) >= 8 || sizeof(size_t) == 4)>;
+      std::bool_constant<(sizeof(Int) >= 8 || sizeof(size_t) == 4)>;
 
   constexpr size_t operator()(Int const& i) const noexcept {
     static_assert(sizeof(Int) <= 16, "Input type is too wide");
@@ -615,13 +612,13 @@ struct IsAvalanchingHasher;
 namespace detail {
 template <typename Hasher, typename Void = void>
 struct IsAvalanchingHasherFromMemberType
-    : bool_constant<!require_sizeof<Hasher>> {};
+    : std::bool_constant<!require_sizeof<Hasher>> {};
 
 template <typename Hasher>
 struct IsAvalanchingHasherFromMemberType<
     Hasher,
     void_t<typename Hasher::folly_is_avalanching>>
-    : bool_constant<Hasher::folly_is_avalanching::value> {};
+    : std::bool_constant<Hasher::folly_is_avalanching::value> {};
 } // namespace detail
 
 template <typename Hasher, typename Key>
@@ -709,7 +706,6 @@ struct hasher<std::string> {
 template <typename K>
 struct IsAvalanchingHasher<hasher<std::string>, K> : std::true_type {};
 
-#if FOLLY_HAS_STRING_VIEW
 template <>
 struct hasher<std::string_view> {
   using folly_is_avalanching = std::true_type;
@@ -721,7 +717,6 @@ struct hasher<std::string_view> {
 };
 template <typename K>
 struct IsAvalanchingHasher<hasher<std::string_view>, K> : std::true_type {};
-#endif
 
 template <typename T>
 struct hasher<T, std::enable_if_t<std::is_enum<T>::value>> {
@@ -989,7 +984,7 @@ struct hash<std::tuple<Ts...>> {
   using FirstT = std::decay_t<std::tuple_element_t<0, std::tuple<Ts..., bool>>>;
 
  public:
-  using folly_is_avalanching = folly::bool_constant<(
+  using folly_is_avalanching = std::bool_constant<(
       sizeof...(Ts) != 1 ||
       folly::IsAvalanchingHasher<std::hash<FirstT>, FirstT>::value)>;
 

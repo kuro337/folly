@@ -215,6 +215,7 @@ int AsyncServerSocket::stopAccepting(int shutdownFlags) {
   // removeAcceptCallback().
   std::vector<CallbackInfo> callbacksCopy;
   callbacks_.swap(callbacksCopy);
+  localCallbackIndex_ = -1;
   for (const auto& callback : callbacksCopy) {
     // consumer may not be set if we are running in primary event base
     if (callback.consumer) {
@@ -673,6 +674,9 @@ void AsyncServerSocket::addAcceptCallback(
     throw;
   }
   callbacks_.back().consumer = acceptor;
+  if (localCallbackIndex_ < 0 && callbacks_.back().eventBase == eventBase_) {
+    localCallbackIndex_ = static_cast<int>(callbacks_.size() - 1);
+  }
 }
 
 void AsyncServerSocket::removeAcceptCallback(

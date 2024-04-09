@@ -236,6 +236,11 @@ class SnapshotBase {
 
   SnapshotBase();
 
+  SnapshotBase(const SnapshotBase&) = delete;
+  SnapshotBase& operator=(const SnapshotBase&) = delete;
+  SnapshotBase(SnapshotBase&&) = delete;
+  SnapshotBase& operator=(SnapshotBase&&) = delete;
+
   template <class T>
   const SettingContents<T>& get(const detail::SettingCore<T>& core) const {
     auto it = snapshotValues_.find(core.getKey());
@@ -254,17 +259,6 @@ class SnapshotBase {
     snapshotValues_[core.getKey()] = detail::BoxedValue(t, reason, core);
   }
 };
-
-template <class T>
-std::enable_if_t<std::is_constructible<T, StringPiece>::value, T>
-convertOrConstruct(StringPiece newValue) {
-  return T(newValue);
-}
-template <class T>
-std::enable_if_t<!std::is_constructible<T, StringPiece>::value, T>
-convertOrConstruct(StringPiece newValue) {
-  return to<T>(newValue);
-}
 
 template <class T>
 class SettingCore : public SettingCoreBase {
@@ -287,14 +281,14 @@ class SettingCore : public SettingCoreBase {
       StringPiece newValue,
       StringPiece reason,
       SnapshotBase* snapshot) override {
-    setImpl(convertOrConstruct<T>(newValue), reason, snapshot);
+    setImpl(convertOrConstruct(newValue), reason, snapshot);
   }
 
   std::pair<std::string, std::string> getAsString(
       const SnapshotBase* snapshot) const override {
     auto& contents = snapshot ? snapshot->get(*this) : getSlow();
     return std::make_pair(
-        to<std::string>(contents.value), contents.updateReason);
+        folly::to<std::string>(contents.value), contents.updateReason);
   }
 
   SetResult resetToDefault(SnapshotBase* snapshot) override {
@@ -394,7 +388,7 @@ class SettingCore : public SettingCoreBase {
         localValue_([]() {
           return new cacheline_aligned<
               std::pair<Version, std::shared_ptr<Contents>>>(
-              in_place, 0, nullptr);
+              std::in_place, 0, nullptr);
         }) {
     forceResetToDefault(/* snapshot */ nullptr);
     registerSetting(*this);
@@ -415,7 +409,7 @@ class SettingCore : public SettingCoreBase {
 
   /* Thread local versions start at 0, this will force a read on first access.
    */
-  cacheline_aligned<std::atomic<Version>> settingVersion_{in_place, 1};
+  cacheline_aligned<std::atomic<Version>> settingVersion_{std::in_place, 1};
 
   ThreadLocal<cacheline_aligned<std::pair<Version, std::shared_ptr<Contents>>>>
       localValue_;
@@ -441,7 +435,7 @@ class SettingCore : public SettingCoreBase {
 
   void setImpl(const T& t, StringPiece reason, SnapshotBase* snapshot) {
     /* Check that we can still display it (will throw otherwise) */
-    to<std::string>(t);
+    folly::to<std::string>(t);
 
     if (snapshot) {
       snapshot->set(*this, t, reason);
@@ -486,6 +480,15 @@ class SettingCore : public SettingCoreBase {
         return false;
       case Mutability::Immutable:
         return immutablesFrozen(meta_.project);
+    }
+  }
+
+  T convertOrConstruct(StringPiece newValue) {
+    if constexpr (std::is_constructible_v<T, StringPiece>) {
+      return T(newValue);
+    } else {
+      SettingValueAndMetadata from(newValue, meta_);
+      return to<T>(from);
     }
   }
 };

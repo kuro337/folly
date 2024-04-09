@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-// @author Kristina Holst (kholst@fb.com)
-// @author Andrei Alexandrescu (andrei.alexandrescu@fb.com)
-
 #include <folly/Range.h>
 
 #include <array>
@@ -310,13 +307,11 @@ TEST(ByteRange, FromString) {
       static_cast<const void*>(s.data()), static_cast<const void*>(b.begin()));
   EXPECT_EQ(s.size(), b.size());
 
-#if FOLLY_HAS_STRING_VIEW
   std::string_view sv(s);
   ByteRange b2(sv);
   EXPECT_EQ(
       static_cast<const void*>(s.data()), static_cast<const void*>(b2.begin()));
   EXPECT_EQ(s.size(), b2.size());
-#endif
 }
 
 TEST(StringPiece, InvalidRange) {
@@ -351,13 +346,13 @@ TEST(StringPiece, Constexpr) {
 
 TEST(StringPiece, Prefix) {
   StringPiece a("hello");
-  EXPECT_TRUE(a.startsWith(""));
-  EXPECT_TRUE(a.startsWith("h"));
-  EXPECT_TRUE(a.startsWith('h'));
-  EXPECT_TRUE(a.startsWith("hello"));
-  EXPECT_FALSE(a.startsWith("hellox"));
-  EXPECT_FALSE(a.startsWith('x'));
-  EXPECT_FALSE(a.startsWith("x"));
+  EXPECT_TRUE(a.starts_with(""));
+  EXPECT_TRUE(a.starts_with("h"));
+  EXPECT_TRUE(a.starts_with('h'));
+  EXPECT_TRUE(a.starts_with("hello"));
+  EXPECT_FALSE(a.starts_with("hellox"));
+  EXPECT_FALSE(a.starts_with('x'));
+  EXPECT_FALSE(a.starts_with("x"));
 
   EXPECT_TRUE(a.startsWith("", folly::AsciiCaseInsensitive()));
   EXPECT_TRUE(a.startsWith("hello", folly::AsciiCaseInsensitive()));
@@ -407,13 +402,13 @@ TEST(StringPiece, Prefix) {
 
 TEST(StringPiece, Suffix) {
   StringPiece a("hello");
-  EXPECT_TRUE(a.endsWith(""));
-  EXPECT_TRUE(a.endsWith("o"));
-  EXPECT_TRUE(a.endsWith('o'));
-  EXPECT_TRUE(a.endsWith("hello"));
-  EXPECT_FALSE(a.endsWith("xhello"));
-  EXPECT_FALSE(a.endsWith("x"));
-  EXPECT_FALSE(a.endsWith('x'));
+  EXPECT_TRUE(a.ends_with(""));
+  EXPECT_TRUE(a.ends_with("o"));
+  EXPECT_TRUE(a.ends_with('o'));
+  EXPECT_TRUE(a.ends_with("hello"));
+  EXPECT_FALSE(a.ends_with("xhello"));
+  EXPECT_FALSE(a.ends_with("x"));
+  EXPECT_FALSE(a.ends_with('x'));
 
   EXPECT_TRUE(a.endsWith("", folly::AsciiCaseInsensitive()));
   EXPECT_TRUE(a.endsWith("o", folly::AsciiCaseInsensitive()));
@@ -1423,6 +1418,8 @@ TEST(Range, Constructors) {
   EXPECT_EQ(subpiece1.size(), 2);
   EXPECT_EQ(subpiece1.begin(), subpiece2.begin());
   EXPECT_EQ(subpiece1.end(), subpiece2.end());
+
+  EXPECT_EQ(StringPiece("hello world").substr(5, 1), " ");
 }
 
 TEST(Range, ArrayConstructors) {
@@ -1631,7 +1628,22 @@ TEST(Range, MutableStringPieceExplicitConversionOperator) {
   EXPECT_EQ("hello", piecec.to<fake_string_view>(fake_tag{}));
 }
 
-#if FOLLY_HAS_STRING_VIEW
+TEST(Range, InitializerList) {
+  auto check = [](Range<int const*> r) {
+    ASSERT_EQ(r.size(), 3);
+    EXPECT_EQ(*r.begin(), 1);
+    EXPECT_EQ(*(r.begin() + 1), 2);
+    EXPECT_EQ(*(r.begin() + 2), 3);
+  };
+
+  check(range({1, 2, 3}));
+  check(crange({1, 2, 3}));
+
+  static constexpr auto ilist = {1, 2, 3};
+  check(range(ilist));
+  check(crange(ilist));
+}
+
 namespace {
 std::size_t stringViewSize(std::string_view s) {
   return s.size();
@@ -1702,11 +1714,9 @@ class NonPOD {
  public:
   NonPOD() {}
 };
-FOLLY_MAYBE_UNUSED void test_func(Range<const NonPOD*>) {}
+[[maybe_unused]] void test_func(Range<const NonPOD*>) {}
 
 } // anonymous namespace
-
-#endif
 
 namespace {
 // Nested class should not cause compile errors due to incomplete parent

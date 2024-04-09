@@ -47,18 +47,7 @@ namespace folly {
  *   If this is a problem then use FOLLY_DECLVAL(T&&) instead, or if T might
  *   be 'void', then use FOLLY_DECLVAL(std::add_rvalue_reference_t<T>).
  */
-#if __cplusplus >= 201703L
 #define FOLLY_DECLVAL(...) static_cast<__VA_ARGS__ (*)() noexcept>(nullptr)()
-#else
-// Don't have noexcept-qualified function types prior to C++17
-// so just fall back to a function-template.
-namespace detail {
-template <typename T>
-T declval() noexcept;
-} // namespace detail
-
-#define FOLLY_DECLVAL(...) ::folly::detail::declval<__VA_ARGS__>()
-#endif
 
 namespace detail {
 template <typename T>
@@ -132,86 +121,11 @@ constexpr detail::decay_t<T> copy(T&& value) noexcept(
   return static_cast<T&&>(value);
 }
 
-/**
- * A simple helper for getting a constant reference to an object.
- *
- * Example:
- *
- *   std::vector<int> v{1,2,3};
- *   // The following two lines are equivalent:
- *   auto a = const_cast<const std::vector<int>&>(v).begin();
- *   auto b = folly::as_const(v).begin();
- *
- * Like C++17's std::as_const. See http://wg21.link/p0007
- */
-#if __cpp_lib_as_const || _LIBCPP_STD_VER > 14 || _MSC_VER
-
-/* using override */ using std::as_const;
-
-#else
-
-template <class T>
-constexpr T const& as_const(T& t) noexcept {
-  return t;
-}
-
-template <class T>
-void as_const(T const&&) = delete;
-
-#endif
-
 //  mimic: forward_like, p0847r0
 template <typename Src, typename Dst>
 constexpr like_t<Src, Dst>&& forward_like(Dst&& dst) noexcept {
   return std::forward<like_t<Src, Dst>>(static_cast<Dst&&>(dst));
 }
-
-/**
- *  Backports from C++17 of:
- *    std::in_place_t
- *    std::in_place_type_t
- *    std::in_place_index_t
- *    std::in_place
- *    std::in_place_type
- *    std::in_place_index
- */
-
-#if FOLLY_CPLUSPLUS >= 201703L
-
-using std::in_place_t;
-
-using std::in_place_type_t;
-
-using std::in_place_index_t;
-
-using std::in_place;
-
-using std::in_place_type;
-
-using std::in_place_index;
-
-#else
-
-struct in_place_t {
-  explicit in_place_t() = default;
-};
-FOLLY_INLINE_VARIABLE constexpr in_place_t in_place{};
-
-template <class>
-struct in_place_type_t {
-  explicit in_place_type_t() = default;
-};
-template <class T>
-FOLLY_INLINE_VARIABLE constexpr in_place_type_t<T> in_place_type{};
-
-template <std::size_t>
-struct in_place_index_t {
-  explicit in_place_index_t() = default;
-};
-template <std::size_t I>
-FOLLY_INLINE_VARIABLE constexpr in_place_index_t<I> in_place_index{};
-
-#endif
 
 /**
  * Initializer lists are a powerful compile time syntax introduced in C++11
@@ -337,7 +251,7 @@ struct identity_fn {
   }
 };
 using Identity = identity_fn;
-FOLLY_INLINE_VARIABLE constexpr identity_fn identity{};
+inline constexpr identity_fn identity{};
 
 namespace detail {
 
@@ -439,6 +353,38 @@ using EnableCopyMove = std::conditional_t<
 using moveonly_::MoveOnly;
 using moveonly_::NonCopyableNonMovable;
 
+/// variadic_noop
+/// variadic_noop_fn
+///
+/// An invocable object and type that has no side-effects - that does nothing
+/// when invoked regardless of the arguments with which it is invoked - and that
+/// returns void.
+///
+/// May be invoked with any arguments. Returns void.
+struct variadic_noop_fn {
+  template <typename... A>
+  constexpr void operator()(A&&...) const noexcept {}
+};
+inline constexpr variadic_noop_fn variadic_noop;
+
+/// variadic_constant_of
+/// variadic_constant_of_fn
+///
+/// An invocable object and type that has no side-effects - that does nothing
+/// when invoked regardless of the arguments with which it is invoked - and that
+/// returns a constant value.
+template <auto Value>
+struct variadic_constant_of_fn {
+  using value_type = decltype(Value);
+  static inline constexpr value_type value = Value;
+  template <typename... A>
+  constexpr value_type operator()(A&&...) const noexcept {
+    return value;
+  }
+};
+template <auto Value>
+inline constexpr variadic_constant_of_fn<Value> variadic_constant_of;
+
 //  unsafe_default_initialized
 //  unsafe_default_initialized_cv
 //
@@ -498,8 +444,7 @@ struct unsafe_default_initialized_cv {
   }
   FOLLY_POP_WARNING
 };
-FOLLY_INLINE_VARIABLE constexpr unsafe_default_initialized_cv
-    unsafe_default_initialized{};
+inline constexpr unsafe_default_initialized_cv unsafe_default_initialized{};
 
 struct to_signed_fn {
   template <typename..., typename T>
@@ -513,7 +458,7 @@ struct to_signed_fn {
     return m < t ? -static_cast<S>(~t) + S{-1} : static_cast<S>(t);
   }
 };
-FOLLY_INLINE_VARIABLE constexpr to_signed_fn to_signed{};
+inline constexpr to_signed_fn to_signed{};
 
 struct to_unsigned_fn {
   template <typename..., typename T>
@@ -523,11 +468,11 @@ struct to_unsigned_fn {
     return static_cast<U>(t);
   }
 };
-FOLLY_INLINE_VARIABLE constexpr to_unsigned_fn to_unsigned{};
+inline constexpr to_unsigned_fn to_unsigned{};
 
 namespace detail {
 template <typename Src, typename Dst>
-FOLLY_INLINE_VARIABLE constexpr bool is_to_narrow_convertible_v =
+inline constexpr bool is_to_narrow_convertible_v =
     (std::is_integral<Dst>::value) &&
     (std::is_signed<Dst>::value == std::is_signed<Src>::value);
 }
@@ -537,18 +482,14 @@ class to_narrow_convertible {
   static_assert(std::is_integral<Src>::value, "not an integer");
 
   template <typename Dst>
-  struct to_ : bool_constant<detail::is_to_narrow_convertible_v<Src, Dst>> {};
+  struct to_
+      : std::bool_constant<detail::is_to_narrow_convertible_v<Src, Dst>> {};
 
  public:
   explicit constexpr to_narrow_convertible(Src const& value) noexcept
       : value_(value) {}
-#if __cplusplus >= 201703L
   explicit to_narrow_convertible(to_narrow_convertible const&) = default;
   explicit to_narrow_convertible(to_narrow_convertible&&) = default;
-#else
-  to_narrow_convertible(to_narrow_convertible const&) = default;
-  to_narrow_convertible(to_narrow_convertible&&) = default;
-#endif
   to_narrow_convertible& operator=(to_narrow_convertible const&) = default;
   to_narrow_convertible& operator=(to_narrow_convertible&&) = default;
 
@@ -586,7 +527,7 @@ struct to_narrow_fn {
     return to_narrow_convertible<Src>{src};
   }
 };
-FOLLY_INLINE_VARIABLE constexpr to_narrow_fn to_narrow{};
+inline constexpr to_narrow_fn to_narrow{};
 
 template <typename Src>
 class to_integral_convertible {
@@ -599,13 +540,8 @@ class to_integral_convertible {
   explicit constexpr to_integral_convertible(Src const& value) noexcept
       : value_(value) {}
 
-#if __cplusplus >= 201703L
   explicit to_integral_convertible(to_integral_convertible const&) = default;
   explicit to_integral_convertible(to_integral_convertible&&) = default;
-#else
-  to_integral_convertible(to_integral_convertible const&) = default;
-  to_integral_convertible(to_integral_convertible&&) = default;
-#endif
   to_integral_convertible& operator=(to_integral_convertible const&) = default;
   to_integral_convertible& operator=(to_integral_convertible&&) = default;
 
@@ -641,7 +577,7 @@ struct to_integral_fn {
     return to_integral_convertible<Src>{src};
   }
 };
-FOLLY_INLINE_VARIABLE constexpr to_integral_fn to_integral{};
+inline constexpr to_integral_fn to_integral{};
 
 template <typename Src>
 class to_floating_point_convertible {
@@ -654,15 +590,10 @@ class to_floating_point_convertible {
   explicit constexpr to_floating_point_convertible(Src const& value) noexcept
       : value_(value) {}
 
-#if __cplusplus >= 201703L
   explicit to_floating_point_convertible(to_floating_point_convertible const&) =
       default;
   explicit to_floating_point_convertible(to_floating_point_convertible&&) =
       default;
-#else
-  to_floating_point_convertible(to_floating_point_convertible const&) = default;
-  to_floating_point_convertible(to_floating_point_convertible&&) = default;
-#endif
   to_floating_point_convertible& operator=(
       to_floating_point_convertible const&) = default;
   to_floating_point_convertible& operator=(to_floating_point_convertible&&) =
@@ -698,7 +629,7 @@ struct to_floating_point_fn {
     return to_floating_point_convertible<Src>{src};
   }
 };
-FOLLY_INLINE_VARIABLE constexpr to_floating_point_fn to_floating_point{};
+inline constexpr to_floating_point_fn to_floating_point{};
 
 struct to_underlying_fn {
   template <typename..., class E>
@@ -707,7 +638,7 @@ struct to_underlying_fn {
     return static_cast<std::underlying_type_t<E>>(e);
   }
 };
-FOLLY_INLINE_VARIABLE constexpr to_underlying_fn to_underlying{};
+inline constexpr to_underlying_fn to_underlying{};
 
 namespace detail {
 template <typename R>
@@ -814,7 +745,7 @@ class invocable_to_convertible : private inheritable<F> {
 //
 //    But conversion, as done with this utility, makes this goal achievable.
 //
-//      list.emplace_back(folly::invoke_to([] {
+//      list.emplace_back(folly::invocable_to([] {
 //        stable obj;
 //        obj.value = 7;
 //        return obj;
@@ -831,5 +762,5 @@ struct invocable_to_fn {
     return R(static_cast<F&&>(f));
   }
 };
-FOLLY_INLINE_VARIABLE constexpr invocable_to_fn invocable_to{};
+inline constexpr invocable_to_fn invocable_to{};
 } // namespace folly

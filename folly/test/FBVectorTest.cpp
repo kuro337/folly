@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-//
-// Author: andrei.alexandrescu@fb.com
-
 #include <folly/FBVector.h>
 
 #include <list>
@@ -260,7 +257,7 @@ TEST(FBVector, zeroLen) {
   fbvector<int> fb7(fb6.begin(), fb6.end());
 }
 
-#if __cpp_deduction_guides >= 201703
+#if __cpp_deduction_guides >= 201611
 TEST(FBVector, deductionGuides) {
   fbvector<int> v(3);
 
@@ -310,6 +307,7 @@ TEST(FBVector, overflowAssign) {
       std::length_error);
 }
 
+#ifndef _MSC_VER
 TEST(FBVector, zeroInit) {
   // This is a higher-level version of TEST(Traits, zeroInit).
   struct S1 {
@@ -323,3 +321,4 @@ TEST(FBVector, zeroInit) {
   EXPECT_EQ(vec[0].mp_, nullptr);
   EXPECT_EQ(vec[8].mp_, nullptr);
 }
+#endif

@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-// @author: Andrei Alexandrescu
-
 #pragma once
 
 #include <cstdint>
@@ -33,19 +31,7 @@ template <typename...>
 struct tag_t {};
 
 template <typename... T>
-FOLLY_INLINE_VARIABLE constexpr tag_t<T...> tag{};
-
-#if __cpp_lib_bool_constant || _MSC_VER
-
-using std::bool_constant;
-
-#else
-
-//  mimic: std::bool_constant, C++17
-template <bool B>
-using bool_constant = std::integral_constant<bool, B>;
-
-#endif
+inline constexpr tag_t<T...> tag{};
 
 template <std::size_t I>
 using index_constant = std::integral_constant<std::size_t, I>;
@@ -84,7 +70,7 @@ using index_constant = std::integral_constant<std::size_t, I>;
 //  This is similar to leaving the base template undefined but we get a nicer
 //  compiler error message with static_assert.
 template <typename...>
-FOLLY_INLINE_VARIABLE constexpr bool always_false = false;
+inline constexpr bool always_false = false;
 
 namespace detail {
 
@@ -116,11 +102,11 @@ constexpr std::size_t require_sizeof = detail::require_sizeof_<void, T>::size;
 //
 //  mimic: std::is_unbounded_array_d, std::is_unbounded_array (C++20)
 template <typename T>
-FOLLY_INLINE_VARIABLE constexpr bool is_unbounded_array_v = false;
+inline constexpr bool is_unbounded_array_v = false;
 template <typename T>
-FOLLY_INLINE_VARIABLE constexpr bool is_unbounded_array_v<T[]> = true;
+inline constexpr bool is_unbounded_array_v<T[]> = true;
 template <typename T>
-struct is_unbounded_array : bool_constant<is_unbounded_array_v<T>> {};
+struct is_unbounded_array : std::bool_constant<is_unbounded_array_v<T>> {};
 
 //  is_bounded_array_v
 //  is_bounded_array
@@ -129,11 +115,11 @@ struct is_unbounded_array : bool_constant<is_unbounded_array_v<T>> {};
 //
 //  mimic: std::is_bounded_array_d, std::is_bounded_array (C++20)
 template <typename T>
-FOLLY_INLINE_VARIABLE constexpr bool is_bounded_array_v = false;
+inline constexpr bool is_bounded_array_v = false;
 template <typename T, std::size_t S>
-FOLLY_INLINE_VARIABLE constexpr bool is_bounded_array_v<T[S]> = true;
+inline constexpr bool is_bounded_array_v<T[S]> = true;
 template <typename T>
-struct is_bounded_array : bool_constant<is_bounded_array_v<T>> {};
+struct is_bounded_array : std::bool_constant<is_bounded_array_v<T>> {};
 
 namespace detail {
 
@@ -147,20 +133,20 @@ namespace detail {
 //  with non-type template parameters, template template parameters, or alias
 //  templates.
 template <template <typename...> class, typename>
-FOLLY_INLINE_VARIABLE constexpr bool is_instantiation_of_v = false;
+inline constexpr bool is_instantiation_of_v = false;
 template <template <typename...> class C, typename... T>
-FOLLY_INLINE_VARIABLE constexpr bool is_instantiation_of_v<C, C<T...>> = true;
+inline constexpr bool is_instantiation_of_v<C, C<T...>> = true;
 template <template <typename...> class C, typename... T>
-struct is_instantiation_of : bool_constant<is_instantiation_of_v<C, T...>> {};
+struct is_instantiation_of
+    : std::bool_constant<is_instantiation_of_v<C, T...>> {};
 
 template <typename, typename>
-FOLLY_INLINE_VARIABLE constexpr bool is_similar_instantiation_v = false;
+inline constexpr bool is_similar_instantiation_v = false;
 template <template <typename...> class C, typename... A, typename... B>
-FOLLY_INLINE_VARIABLE constexpr bool
-    is_similar_instantiation_v<C<A...>, C<B...>> = true;
+inline constexpr bool is_similar_instantiation_v<C<A...>, C<B...>> = true;
 template <typename A, typename B>
 struct is_similar_instantiation
-    : bool_constant<is_similar_instantiation_v<A, B>> {};
+    : std::bool_constant<is_similar_instantiation_v<A, B>> {};
 
 } // namespace detail
 
@@ -209,11 +195,11 @@ struct is_constexpr_default_constructible_ {
 //  constexpr default-constructible, that is, default-constructible in a
 //  constexpr context.
 template <typename T>
-FOLLY_INLINE_VARIABLE constexpr bool is_constexpr_default_constructible_v =
+inline constexpr bool is_constexpr_default_constructible_v =
     detail::is_constexpr_default_constructible_::apply<T>;
 template <typename T>
 struct is_constexpr_default_constructible
-    : bool_constant<is_constexpr_default_constructible_v<T>> {};
+    : std::bool_constant<is_constexpr_default_constructible_v<T>> {};
 
 /***
  *  _t
@@ -443,8 +429,8 @@ using detected_t = detected_or_t<nonesuch, T, A...>;
 //
 //  The trait variable is_detected_v<T, A...> is equivalent to
 //  detected_or<nonesuch, T, A...>::value_t::value.
-//  The trait type is_detected<T, A...> unambiguously inherits bool_constant<V>
-//  where V is is_detected_v<T, A...>.
+//  The trait type is_detected<T, A...> unambiguously inherits
+//  std::bool_constant<V> where V is is_detected_v<T, A...>.
 //
 //  mimic: std::experimental::is_detected, std::experimental::is_detected_v,
 //    Library Fundamentals TS v2
@@ -453,7 +439,7 @@ using detected_t = detected_or_t<nonesuch, T, A...>;
 //
 //  Note: the trait type is_detected differs here by being deferred.
 template <template <typename...> class T, typename... A>
-FOLLY_INLINE_VARIABLE constexpr bool is_detected_v =
+inline constexpr bool is_detected_v =
     detected_or<nonesuch, T, A...>::value_t::value;
 template <template <typename...> class T, typename... A>
 struct is_detected : detected_or<nonesuch, T, A...>::value_t {};
@@ -462,31 +448,18 @@ template <typename T>
 using aligned_storage_for_t =
     typename std::aligned_storage<sizeof(T), alignof(T)>::type;
 
-// Older versions of libstdc++ do not provide std::is_trivially_copyable
-#if defined(__clang__) && !defined(_LIBCPP_VERSION)
-template <class T>
-struct is_trivially_copyable : bool_constant<__is_trivially_copyable(T)> {};
-#else
-template <class T>
-using is_trivially_copyable = std::is_trivially_copyable<T>;
-#endif
-
-template <class T>
-FOLLY_INLINE_VARIABLE constexpr bool is_trivially_copyable_v =
-    is_trivially_copyable<T>::value;
-
 //  ----
 
 namespace fallback {
 template <typename From, typename To>
-FOLLY_INLINE_VARIABLE constexpr bool is_nothrow_convertible_v =
+inline constexpr bool is_nothrow_convertible_v =
     (std::is_void<From>::value && std::is_void<To>::value) ||
     ( //
         std::is_convertible<From, To>::value &&
         std::is_nothrow_constructible<To, From>::value);
 template <typename From, typename To>
 struct is_nothrow_convertible
-    : bool_constant<is_nothrow_convertible_v<From, To>> {};
+    : std::bool_constant<is_nothrow_convertible_v<From, To>> {};
 } // namespace fallback
 
 //  is_nothrow_convertible
@@ -607,41 +580,13 @@ struct IsLessThanComparable
 /* using override */ using traits_detail_IsLessThanComparable::
     IsLessThanComparable;
 
-namespace traits_detail_IsNothrowSwappable {
-#if defined(__cpp_lib_is_swappable) || (_CPPLIB_VER && _HAS_CXX17)
-// MSVC already implements the C++17 P0185R1 proposal which adds
-// std::is_nothrow_swappable, so use it instead if C++17 mode is
-// enabled.
-template <typename T>
-using IsNothrowSwappable = std::is_nothrow_swappable<T>;
-#elif _CPPLIB_VER
-// MSVC defines the base even if C++17 is disabled, and MSVC has
-// issues with our fallback implementation due to over-eager
-// evaluation of noexcept.
-template <typename T>
-using IsNothrowSwappable = std::_Is_nothrow_swappable<T>;
-#else
-/* using override */ using std::swap;
-
-template <class T>
-struct IsNothrowSwappable
-    : bool_constant<std::is_nothrow_move_constructible<T>::value&& noexcept(
-          swap(std::declval<T&>(), std::declval<T&>()))> {};
-#endif
-} // namespace traits_detail_IsNothrowSwappable
-
-/* using override */ using traits_detail_IsNothrowSwappable::IsNothrowSwappable;
-
 template <class T>
 struct IsRelocatable
     : std::conditional<
           !require_sizeof<T> ||
               is_detected_v<traits_detail::detect_IsRelocatable, T>,
           traits_detail::has_true_IsRelocatable<T>,
-          // TODO add this line (and some tests for it) when we
-          // upgrade to gcc 4.7
-          // std::is_trivially_move_constructible<T>::value ||
-          is_trivially_copyable<T>>::type {};
+          std::is_trivially_copyable<T>>::type {};
 
 template <class T>
 struct IsZeroInitializable
@@ -649,7 +594,7 @@ struct IsZeroInitializable
           !require_sizeof<T> ||
               is_detected_v<traits_detail::detect_IsZeroInitializable, T>,
           traits_detail::has_true_IsZeroInitializable<T>,
-          bool_constant< //
+          std::bool_constant< //
               !std::is_class<T>::value && //
               !std::is_union<T>::value && //
               !std::is_member_object_pointer<T>::value && // itanium
@@ -697,7 +642,7 @@ struct Disjunction<T, TList...>
     : std::conditional<T::value, T, Disjunction<TList...>>::type {};
 
 template <typename T>
-struct Negation : bool_constant<!T::value> {};
+struct Negation : std::bool_constant<!T::value> {};
 
 template <bool... Bs>
 struct Bools {
@@ -727,17 +672,17 @@ using is_transparent_ = typename T::is_transparent;
 //  follows the is-transparent protocol used by containers with optional
 //  heterogeneous access.
 template <typename T>
-FOLLY_INLINE_VARIABLE constexpr bool is_transparent_v =
+inline constexpr bool is_transparent_v =
     is_detected_v<detail::is_transparent_, T>;
 template <typename T>
-struct is_transparent : bool_constant<is_transparent_v<T>> {};
+struct is_transparent : std::bool_constant<is_transparent_v<T>> {};
 
 namespace detail {
 
 template <typename T, typename = void>
-FOLLY_INLINE_VARIABLE constexpr bool is_allocator_ = !require_sizeof<T>;
+inline constexpr bool is_allocator_ = !require_sizeof<T>;
 template <typename T>
-FOLLY_INLINE_VARIABLE constexpr bool is_allocator_<
+inline constexpr bool is_allocator_<
     T,
     void_t<
         typename T::value_type,
@@ -754,9 +699,9 @@ FOLLY_INLINE_VARIABLE constexpr bool is_allocator_<
 //  A trait variable and type to test whether a type is an allocator according
 //  to the minimum protocol required by std::allocator_traits.
 template <typename T>
-FOLLY_INLINE_VARIABLE constexpr bool is_allocator_v = detail::is_allocator_<T>;
+inline constexpr bool is_allocator_v = detail::is_allocator_<T>;
 template <typename T>
-struct is_allocator : bool_constant<is_allocator_v<T>> {};
+struct is_allocator : std::bool_constant<is_allocator_v<T>> {};
 
 } // namespace folly
 
@@ -836,7 +781,7 @@ namespace folly {
 // STL commonly-used types
 template <class T, class U>
 struct IsRelocatable<std::pair<T, U>>
-    : bool_constant<IsRelocatable<T>::value && IsRelocatable<U>::value> {};
+    : std::bool_constant<IsRelocatable<T>::value && IsRelocatable<U>::value> {};
 
 // Is T one of T1, T2, ..., Tn?
 template <typename T, typename... Ts>
@@ -846,10 +791,7 @@ using IsOneOf = StrictDisjunction<std::is_same<T, Ts>...>;
  * Complementary type traits for integral comparisons.
  *
  * For instance, `if(x < 0)` yields an error in clang for unsigned types
- *  when -Werror is used due to -Wtautological-compare
- *
- *
- * @author: Marcelo Juchem <marcelo@fb.com>
+ * when -Werror is used due to -Wtautological-compare
  */
 
 // same as `x < 0`
@@ -966,22 +908,22 @@ namespace folly {
 template <typename T>
 struct is_arithmetic : std::is_arithmetic<T> {};
 template <typename T>
-FOLLY_INLINE_VARIABLE constexpr bool is_arithmetic_v = is_arithmetic<T>::value;
+inline constexpr bool is_arithmetic_v = is_arithmetic<T>::value;
 
 template <typename T>
 struct is_integral : std::is_integral<T> {};
 template <typename T>
-FOLLY_INLINE_VARIABLE constexpr bool is_integral_v = is_integral<T>::value;
+inline constexpr bool is_integral_v = is_integral<T>::value;
 
 template <typename T>
 struct is_signed : std::is_signed<T> {};
 template <typename T>
-FOLLY_INLINE_VARIABLE constexpr bool is_signed_v = is_signed<T>::value;
+inline constexpr bool is_signed_v = is_signed<T>::value;
 
 template <typename T>
 struct is_unsigned : std::is_unsigned<T> {};
 template <typename T>
-FOLLY_INLINE_VARIABLE constexpr bool is_unsigned_v = is_unsigned<T>::value;
+inline constexpr bool is_unsigned_v = is_unsigned<T>::value;
 
 template <typename T>
 struct make_signed : std::make_signed<T> {};
@@ -1094,19 +1036,21 @@ using type_pack_element_fallback = _t<decltype(type_pack_element_test<I>::impl(
 
 } // namespace traits_detail
 
+//  type_pack_element_t
+//
+//  In the type pack Ts..., the Ith element.
+//
+//  Wraps the builtin __type_pack_element where the builtin is available; where
+//  not, implemented directly.
+//
+//  Under gcc, the builtin is available but does not mangle. Therefore, this
+//  trait must not be used anywhere it might be subject to mangling, such as in
+//  a return-type expression.
+
 #if FOLLY_HAS_BUILTIN(__type_pack_element)
 
-#if __clang__
 template <std::size_t I, typename... Ts>
 using type_pack_element_t = __type_pack_element<I, Ts...>;
-#else
-template <std::size_t I, typename... Ts>
-struct type_pack_element {
-  using type = __type_pack_element<I, Ts...>;
-};
-template <std::size_t I, typename... Ts>
-using type_pack_element_t = typename type_pack_element<I, Ts...>::type;
-#endif
 
 #else
 
@@ -1115,10 +1059,109 @@ using type_pack_element_t = traits_detail::type_pack_element_fallback<I, Ts...>;
 
 #endif
 
+//  type_pack_size_v
+//
+//  The size of a type pack.
+//
+//  A metafunction around sizeof...(Ts).
 template <typename... Ts>
-FOLLY_INLINE_VARIABLE constexpr std::size_t type_pack_size_v = sizeof...(Ts);
+inline constexpr std::size_t type_pack_size_v = sizeof...(Ts);
 
+//  type_pack_size_t
+//
+//  The size of a type pack.
+//
+//  A metafunction around index_constant<sizeof...(Ts)>.
 template <typename... Ts>
 using type_pack_size_t = index_constant<sizeof...(Ts)>;
+
+/**
+ * Checks the requirements that the Hasher class must satisfy
+ * in order to be used with the standard library containers,
+ * for example `std::unordered_set<T, Hasher>`.
+ */
+template <typename T, typename Hasher>
+using is_hasher_usable = std::integral_constant<
+    bool,
+    std::is_default_constructible_v<Hasher> &&
+        std::is_copy_constructible_v<Hasher> &&
+        std::is_move_constructible_v<Hasher> &&
+        std::is_invocable_r_v<size_t, Hasher, const T&>>;
+
+/**
+ * Checks the requirements that the Hasher class must satisfy
+ * in order to be used with the standard library containers,
+ * for example `std::unordered_set<T, Hasher>`.
+ */
+template <typename T, typename Hasher>
+inline constexpr bool is_hasher_usable_v = is_hasher_usable<T, Hasher>::value;
+
+/**
+ * Checks that the given hasher template's specialization for the given type
+ * is usable with the standard library containters,
+ * for example `std::unordered_set<T, Hasher<T>>`.
+ */
+template <typename T, template <typename U> typename Hasher = std::hash>
+using is_hashable =
+    std::integral_constant<bool, is_hasher_usable_v<T, Hasher<T>>>;
+
+/**
+ * Checks that the given hasher template's specialization for the given type
+ * is usable with the standard library containters,
+ * for example `std::unordered_set<T, Hasher<T>>`.
+ */
+template <typename T, template <typename U> typename Hasher = std::hash>
+inline constexpr bool is_hashable_v = is_hashable<T, Hasher>::value;
+
+namespace detail {
+
+template <typename T, typename>
+using enable_hasher_helper_impl = T;
+
+} // namespace detail
+
+/**
+ * A helper for defining partial specializations of a hasher class that rely
+ * on other partial specializations of that hasher class being usable.
+ *
+ * Example:
+ * ```
+ * template <typename T>
+ * struct hash<
+ *     folly::enable_std_hash_helper<folly::Optional<T>, remove_const_t<T>>> {
+ *   size_t operator()(folly::Optional<T> const& obj) const {
+ *     return static_cast<bool>(obj) ? hash<remove_const_t<T>>()(*obj) : 0;
+ *   }
+ * };
+ * ```
+ */
+template <
+    typename T,
+    template <typename U>
+    typename Hasher,
+    typename... Dependencies>
+using enable_hasher_helper = detail::enable_hasher_helper_impl<
+    T,
+    std::enable_if_t<
+        StrictConjunction<is_hashable<Dependencies, Hasher>...>::value>>;
+
+/**
+ * A helper for defining partial specializations of a hasher class that rely
+ * on other partial specializations of that hasher class being usable.
+ *
+ * Example:
+ * ```
+ * template <typename T>
+ * struct hash<
+ *     folly::enable_std_hash_helper<folly::Optional<T>, remove_const_t<T>>> {
+ *   size_t operator()(folly::Optional<T> const& obj) const {
+ *     return static_cast<bool>(obj) ? hash<remove_const_t<T>>()(*obj) : 0;
+ *   }
+ * };
+ * ```
+ */
+template <typename T, typename... Dependencies>
+using enable_std_hash_helper =
+    enable_hasher_helper<T, std::hash, Dependencies...>;
 
 } // namespace folly

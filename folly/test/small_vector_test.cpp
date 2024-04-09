@@ -111,7 +111,7 @@ static_assert(
 #endif
 
 static_assert(
-    !folly::is_trivially_copyable<std::unique_ptr<int>>::value,
+    !std::is_trivially_copyable<std::unique_ptr<int>>::value,
     "std::unique_ptr<> is trivially copyable");
 
 static_assert(
@@ -170,7 +170,7 @@ struct NontrivialType {
   int32_t a;
 };
 static_assert(
-    !folly::is_trivially_copyable<NontrivialType>::value,
+    !std::is_trivially_copyable<NontrivialType>::value,
     "NontrivialType is trivially copyable");
 
 int NontrivialType::ctored = 0;
@@ -231,7 +231,7 @@ struct NoncopyableCounter {
 int NoncopyableCounter::alive = 0;
 
 static_assert(
-    !folly::is_trivially_copyable<NoncopyableCounter>::value,
+    !std::is_trivially_copyable<NoncopyableCounter>::value,
     "NoncopyableCounter is trivially copyable");
 
 // Check that throws don't break the basic guarantee for some cases.
@@ -411,7 +411,7 @@ TEST(smallVector, InsertNontrivial) {
   EXPECT_EQ(v3[11].s, "asd");
 }
 
-TEST(smallVecctor, InsertFromBidirectionalList) {
+TEST(smallVector, InsertFromBidirectionalList) {
   folly::small_vector<std::string> v(6, "asd");
   std::list<std::string> l(6, "wat");
   v.insert(v.end(), l.begin(), l.end());
@@ -1468,6 +1468,12 @@ TEST(smallVector, overflowAssign) {
   EXPECT_THROW(
       vec.assign(SIZE_MAX / sizeof(std::string) + 1, "hello"),
       std::length_error);
+}
+
+TEST(smallVector, assignZeroElementsNoInline) {
+  folly::small_vector<int, 0> v;
+  v.assign(0, 42);
+  EXPECT_TRUE(v.empty());
 }
 
 namespace {

@@ -290,7 +290,7 @@ TEST(ReplaceableTest, DestructsWhenExpected) {
 }
 
 TEST(ReplaceableTest, Conversions) {
-  Replaceable<OddB> rOddB{in_place, {1, 2, 3}, 4};
+  Replaceable<OddB> rOddB{std::in_place, {1, 2, 3}, 4};
   Replaceable<OddA> rOddA{std::move(rOddB)};
   Replaceable<OddB> rOddB2{rOddA};
 }
@@ -333,7 +333,7 @@ TEST(ReplaceableTest, swapMemberFunctionDelegatesToUserSwap) {
   EXPECT_TRUE(r1->calledSwap);
 }
 
-#if __cpp_deduction_guides >= 201703
+#if __cpp_deduction_guides >= 201611
 TEST(ReplaceableTest, DeductionGuide) {
   Basic b{};
   Replaceable r{b};

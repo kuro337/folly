@@ -23,11 +23,14 @@
 #include <utility>
 #include <vector>
 
+#include <folly/CppAttributes.h>
 #include <folly/ScopeGuard.h>
 #include <folly/portability/GTest.h>
 
 using namespace folly;
 using namespace std;
+
+namespace {
 
 struct T1 {}; // old-style IsRelocatable, below
 struct T2 {}; // old-style IsRelocatable, below
@@ -48,6 +51,52 @@ struct F4 : T1 {};
 template <class>
 struct A {};
 struct B {};
+
+struct HashableStruct1 {};
+struct HashableStruct2 {};
+struct UnhashableStruct {};
+
+template <typename X, typename Y>
+struct CompositeStruct {
+  X x;
+  Y y;
+};
+
+} // namespace
+
+namespace std {
+
+template <>
+struct hash<HashableStruct1> {
+  [[maybe_unused]] size_t operator()(const HashableStruct1&) const noexcept {
+    return 0;
+  }
+};
+
+template <>
+struct hash<HashableStruct2> {
+  [[maybe_unused]] size_t operator()(const HashableStruct2&) const noexcept {
+    return 0;
+  }
+};
+
+template <typename X, typename Y>
+struct hash<enable_std_hash_helper<CompositeStruct<X, Y>, X, Y>> {
+  [[maybe_unused]] size_t operator()(
+      const CompositeStruct<X, Y>& value) const noexcept {
+    return std::hash<X>{}(value.x) + std::hash<Y>{}(value.y);
+  }
+};
+
+static_assert(is_hashable_v<HashableStruct1>);
+static_assert(is_hashable_v<HashableStruct2>);
+static_assert(!is_hashable_v<UnhashableStruct>);
+static_assert(is_hashable_v<CompositeStruct<HashableStruct1, HashableStruct1>>);
+static_assert(is_hashable_v<CompositeStruct<HashableStruct1, HashableStruct2>>);
+static_assert(
+    !is_hashable_v<CompositeStruct<HashableStruct1, UnhashableStruct>>);
+
+} // namespace std
 
 namespace folly {
 template <>
@@ -277,10 +326,8 @@ TEST(Traits, tag) {
   inspects_tag f;
   EXPECT_FALSE(f.is_char(tag_t<int>{}));
   EXPECT_TRUE(f.is_char(tag_t<char>{}));
-#if __cplusplus >= 201703L
   EXPECT_FALSE(f.is_char(tag<int>));
   EXPECT_TRUE(f.is_char(tag<char>));
-#endif
 }
 
 namespace {
@@ -369,8 +416,8 @@ TEST(Traits, fallbackIsNothrowConvertible) {
   EXPECT_FALSE((folly::fallback::is_nothrow_convertible<int, void>::value));
   EXPECT_TRUE((folly::fallback::is_nothrow_convertible<void, void>::value));
   struct foo {
-    /* implicit */ FOLLY_MAYBE_UNUSED operator std::false_type();
-    /* implicit */ FOLLY_MAYBE_UNUSED operator std::true_type() noexcept;
+    /* implicit */ [[maybe_unused]] operator std::false_type();
+    /* implicit */ [[maybe_unused]] operator std::true_type() noexcept;
   };
   EXPECT_FALSE(
       (folly::fallback::is_nothrow_convertible<foo, std::false_type>::value));
@@ -382,8 +429,8 @@ TEST(Traits, isNothrowConvertible) {
   EXPECT_FALSE((folly::is_nothrow_convertible<int, void>::value));
   EXPECT_TRUE((folly::is_nothrow_convertible<void, void>::value));
   struct foo {
-    /* implicit */ FOLLY_MAYBE_UNUSED operator std::false_type();
-    /* implicit */ FOLLY_MAYBE_UNUSED operator std::true_type() noexcept;
+    /* implicit */ [[maybe_unused]] operator std::false_type();
+    /* implicit */ [[maybe_unused]] operator std::true_type() noexcept;
   };
   EXPECT_FALSE((folly::is_nothrow_convertible<foo, std::false_type>::value));
   EXPECT_TRUE((folly::is_nothrow_convertible<foo, std::true_type>::value));
@@ -534,7 +581,7 @@ TEST(Traits, isConstexprDefaultConstructible) {
   EXPECT_TRUE(is_constexpr_default_constructible<Empty>{});
 
   struct NonTrivialDtor {
-    FOLLY_MAYBE_UNUSED ~NonTrivialDtor() {}
+    [[maybe_unused]] ~NonTrivialDtor() {}
   };
   EXPECT_FALSE(is_constexpr_default_constructible_v<NonTrivialDtor>);
   EXPECT_FALSE(is_constexpr_default_constructible<NonTrivialDtor>{});

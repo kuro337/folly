@@ -29,7 +29,10 @@ template <typename T>
 struct atomic_ref_base {
   static_assert(sizeof(T) == sizeof(std::atomic<T>), "size mismatch");
   static_assert(alignof(T) == alignof(std::atomic<T>), "alignment mismatch");
-  static_assert(is_trivially_copyable_v<T>, "value not trivially-copyable");
+  static_assert(
+      std::is_trivially_copyable_v<T>, "value not trivially-copyable");
+
+  using value_type = T;
 
   explicit atomic_ref_base(T& ref) : ref_(ref) {}
   atomic_ref_base(atomic_ref_base const&) = default;
@@ -145,7 +148,7 @@ class atomic_ref : public detail::atomic_ref_select<T> {
   using base::base;
 };
 
-#if __cpp_deduction_guides >= 201703
+#if __cpp_deduction_guides >= 201611
 
 template <typename T>
 atomic_ref(T&) -> atomic_ref<T>;
@@ -156,7 +159,8 @@ struct make_atomic_ref_t {
   template <
       typename T,
       std::enable_if_t<
-          is_trivially_copyable_v<T> && sizeof(T) == sizeof(std::atomic<T>) &&
+          std::is_trivially_copyable_v<T> &&
+              sizeof(T) == sizeof(std::atomic<T>) &&
               alignof(T) == alignof(std::atomic<T>),
           int> = 0>
   atomic_ref<T> operator()(T& ref) const {
@@ -164,6 +168,6 @@ struct make_atomic_ref_t {
   }
 };
 
-FOLLY_INLINE_VARIABLE constexpr make_atomic_ref_t make_atomic_ref;
+inline constexpr make_atomic_ref_t make_atomic_ref;
 
 } // namespace folly

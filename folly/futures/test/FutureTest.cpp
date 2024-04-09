@@ -28,8 +28,8 @@
 #include <folly/Executor.h>
 #include <folly/Memory.h>
 #include <folly/Unit.h>
-#include <folly/dynamic.h>
 #include <folly/executors/ManualExecutor.h>
+#include <folly/json/dynamic.h>
 #include <folly/portability/GTest.h>
 #include <folly/synchronization/Baton.h>
 
@@ -1132,7 +1132,7 @@ TEST(Future, ImplicitConstructor) {
 }
 
 TEST(Future, InPlaceConstructor) {
-  auto f = Future<std::pair<int, double>>(in_place, 5, 3.2);
+  auto f = Future<std::pair<int, double>>(std::in_place, 5, 3.2);
   EXPECT_EQ(5, f.value().first);
 }
 
