@@ -579,9 +579,7 @@ class Range {
   }
 
   constexpr size_type size() const {
-#if __clang__ || !__GNUC__ || __GNUC__ >= 7
     assert(b_ <= e_);
-#endif
     return size_type(e_ - b_);
   }
   constexpr size_type walk_size() const {
@@ -1679,29 +1677,29 @@ struct hasher<
  */
 inline namespace literals {
 inline namespace string_piece_literals {
-constexpr Range<char const*> operator"" _sp(
+constexpr Range<char const*> operator""_sp(
     char const* str, size_t len) noexcept {
   return Range<char const*>(str, len);
 }
 
 #if defined(__cpp_char8_t) && __cpp_char8_t >= 201811L
-constexpr Range<char8_t const*> operator"" _sp(
+constexpr Range<char8_t const*> operator""_sp(
     char8_t const* str, size_t len) noexcept {
   return Range<char8_t const*>(str, len);
 }
 #endif
 
-constexpr Range<char16_t const*> operator"" _sp(
+constexpr Range<char16_t const*> operator""_sp(
     char16_t const* str, size_t len) noexcept {
   return Range<char16_t const*>(str, len);
 }
 
-constexpr Range<char32_t const*> operator"" _sp(
+constexpr Range<char32_t const*> operator""_sp(
     char32_t const* str, size_t len) noexcept {
   return Range<char32_t const*>(str, len);
 }
 
-constexpr Range<wchar_t const*> operator"" _sp(
+constexpr Range<wchar_t const*> operator""_sp(
     wchar_t const* str, size_t len) noexcept {
   return Range<wchar_t const*>(str, len);
 }

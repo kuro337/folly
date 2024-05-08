@@ -391,7 +391,9 @@ class F14HashedKey final {
 
   const TKeyType& getKey() const { return key_; }
   const F14HashToken& getHashToken() const { return hash_; }
-  explicit operator const TKeyType&() const { return key_; }
+  // We want the conversion to the key to be implicit - the hashed key should
+  // seamlessly behave as the key itself.
+  /* implicit */ operator const TKeyType&() const { return key_; }
   explicit operator const F14HashToken&() const { return hash_; }
 
   bool operator==(const F14HashedKey& other) const {
@@ -1176,6 +1178,7 @@ class F14Table : public Policy {
   using Alloc = typename Policy::Alloc;
   using AllocTraits = typename Policy::AllocTraits;
   using Hasher = typename Policy::Hasher;
+  using InternalSizeType = typename Policy::InternalSizeType;
   using KeyEqual = typename Policy::KeyEqual;
 
   using Policy::kAllocIsAlwaysEqual;
@@ -1261,9 +1264,9 @@ class F14Table : public Policy {
   }
 
   F14Table(F14Table&& rhs) noexcept(
-      std::is_nothrow_move_constructible<Hasher>::value&&
-          std::is_nothrow_move_constructible<KeyEqual>::value&&
-              std::is_nothrow_move_constructible<Alloc>::value)
+      std::is_nothrow_move_constructible<Hasher>::value &&
+      std::is_nothrow_move_constructible<KeyEqual>::value &&
+      std::is_nothrow_move_constructible<Alloc>::value)
       : Policy{std::move(rhs)} {
     swapContents(rhs);
   }
@@ -1293,8 +1296,8 @@ class F14Table : public Policy {
   }
 
   F14Table& operator=(F14Table&& rhs) noexcept(
-      std::is_nothrow_move_assignable<Hasher>::value&&
-          std::is_nothrow_move_assignable<KeyEqual>::value &&
+      std::is_nothrow_move_assignable<Hasher>::value &&
+      std::is_nothrow_move_assignable<KeyEqual>::value &&
       (kAllocIsAlwaysEqual ||
        (AllocTraits::propagate_on_container_move_assignment::value &&
         std::is_nothrow_move_assignable<Alloc>::value))) {
@@ -1452,7 +1455,9 @@ class F14Table : public Policy {
   std::size_t max_size() const noexcept {
     auto& a = this->alloc();
     return std::min<std::size_t>(
-        SizeAndChunkShift::kMaxSize, AllocTraits::max_size(a));
+        {SizeAndChunkShift::kMaxSize,
+         std::numeric_limits<InternalSizeType>::max(),
+         AllocTraits::max_size(a)});
   }
 
   std::size_t bucket_count() const noexcept {
